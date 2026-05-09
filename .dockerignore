@@ -1,0 +1,8 @@
+deb/
+*.download
+*.backup-*
+odoo-sub-key.txt
+
+.git/
+.github/
+__pycache__/

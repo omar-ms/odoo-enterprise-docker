@@ -1,0 +1,11 @@
+# Ignore all Odoo/Debian package files anywhere
+*.deb
+
+# Temp/secrets
+odoo-sub-key.txt
+*.download
+*.backup-*
+
+# Python
+__pycache__/
+*.pyc
