@@ -71,7 +71,9 @@ RUN npm install -g rtlcss
 
 # Install Odoo Enterprise from local .deb
 ARG ODOO_VERSION=19.0
+ARG ODOO_RELEASE=unknown
 LABEL org.opencontainers.image.version="${ODOO_VERSION}"
+LABEL org.odoo.release="${ODOO_RELEASE}"
 ENV ODOO_VERSION=${ODOO_VERSION}
 
 COPY ./odoo_enterprise.deb /tmp/odoo_enterprise.deb

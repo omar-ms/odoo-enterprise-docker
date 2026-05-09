@@ -84,16 +84,22 @@ latest matching package with `--use-latest`.
 
 ## Build Behavior
 
-The Dockerfile accepts the selected Odoo version as a build argument and stores
-it in the image as both `ODOO_VERSION` and
-`org.opencontainers.image.version`. `build.py` temporarily copies the selected
-package into the root-level filename `odoo_enterprise.deb`, then runs:
+The Dockerfile accepts the selected Odoo version and the package release as
+build arguments. It stores the selected version in `ODOO_VERSION` and
+`org.opencontainers.image.version`, and stores the package release date from
+the `.deb` filename in the image label `org.odoo.release`. `build.py`
+temporarily copies the selected package into the root-level filename
+`odoo_enterprise.deb`, then runs:
 
 ```bash
 docker build \
   --build-arg ODOO_VERSION=<version> \
+  --build-arg ODOO_RELEASE=<release-date> \
   -t <local-image-name> .
 ```
+
+For example, `deb/odoo_19.0+e.20260509_all.deb` produces
+`ODOO_VERSION=19.0` and `org.odoo.release=20260509` in the built image.
 
 After the build finishes, the temporary package is removed. If a file with the
 same name already existed, it is backed up and restored.

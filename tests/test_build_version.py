@@ -72,10 +72,28 @@ class OdooVersionSelectionTests(unittest.TestCase):
                 "build",
                 "--build-arg",
                 "ODOO_VERSION=18.0",
+                "--build-arg",
+                "ODOO_RELEASE=20260509",
                 "-t",
                 "odoo-ee:18.0",
                 ".",
             ]
+        )
+
+    def test_extract_release_version_from_official_deb_name(self):
+        self.assertEqual(
+            build.extract_release_version(
+                Path("deb/odoo_19.0+e.20260509_all.deb")
+            ),
+            "20260509",
+        )
+
+    def test_extract_release_version_returns_unknown_for_non_official_name(self):
+        self.assertEqual(
+            build.extract_release_version(
+                Path("deb/custom_odoo_build.deb")
+            ),
+            "unknown",
         )
 
 
@@ -84,8 +102,10 @@ class DockerfileVersionContractTests(unittest.TestCase):
         text = Path("Dockerfile").read_text()
 
         self.assertIn("ARG ODOO_VERSION=19.0", text)
+        self.assertIn("ARG ODOO_RELEASE=unknown", text)
         self.assertIn("ENV ODOO_VERSION=${ODOO_VERSION}", text)
         self.assertIn('LABEL org.opencontainers.image.version="${ODOO_VERSION}"', text)
+        self.assertIn('LABEL org.odoo.release="${ODOO_RELEASE}"', text)
         self.assertIn("COPY ./odoo_enterprise.deb /tmp/odoo_enterprise.deb", text)
         self.assertNotIn("ODOO_DEB_NAME", text)
 

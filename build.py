@@ -299,6 +299,15 @@ def extract_release_date(path: Path) -> int:
     return 0
 
 
+def extract_release_version(path: Path) -> str:
+    match = re.match(r"^odoo_[^+]+\+e\.(\d{8})_all\.deb$", path.name)
+
+    if match:
+        return match.group(1)
+
+    return "unknown"
+
+
 def deb_matches_version(path: Path, odoo_version: str) -> bool:
     pattern = rf"^odoo_{re.escape(odoo_version)}\+e\.\d{{8}}_all\.deb$"
     return re.match(pattern, path.name) is not None
@@ -698,15 +707,19 @@ def build_image(
     odoo_version: str,
     args: argparse.Namespace,
 ) -> None:
+    odoo_release = extract_release_version(selected_deb)
     build_args = [
         "--build-arg",
         f"ODOO_VERSION={odoo_version}",
+        "--build-arg",
+        f"ODOO_RELEASE={odoo_release}",
     ]
 
     print()
     print("Build summary:")
     print(f"Local image name: {image_name}")
     print(f"Odoo version: {odoo_version}")
+    print(f"Odoo release: {odoo_release}")
     print(f"Selected .deb: {selected_deb}")
     print(f"Dockerfile temporary .deb: ./{DOCKER_BUILD_DEB}")
     print()
@@ -795,7 +808,7 @@ def main() -> None:
 
     print()
     print("Odoo Enterprise Docker builder")
-    print("Dockerfile stores the selected version as image metadata.")
+    print("Dockerfile stores the selected version and release as image metadata.")
     print()
     print(f"Odoo version: {odoo_version}")
     print(f"Odoo platform_version: {platform_version}")
