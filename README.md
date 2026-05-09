@@ -83,12 +83,15 @@ latest matching package with `--use-latest`.
 
 ## Build Behavior
 
-The Dockerfile expects a root-level package named `odoo_19_enterprise.deb`.
-`build.py` keeps the Dockerfile unchanged by temporarily copying the selected
-package into that expected filename, then running:
+The Dockerfile accepts the selected Odoo version as a build argument and stores
+it in the image as both `ODOO_VERSION` and
+`org.opencontainers.image.version`. `build.py` temporarily copies the selected
+package into the root-level filename `odoo_enterprise.deb`, then runs:
 
 ```bash
-docker build -t <local-image-name> .
+docker build \
+  --build-arg ODOO_VERSION=<version> \
+  -t <local-image-name> .
 ```
 
 After the build finishes, the temporary package is removed. If a file with the
@@ -98,7 +101,7 @@ same name already existed, it is backed up and restored.
 the local subscription key file. `.dockerignore` excludes the `deb/` cache,
 GitHub metadata, Python cache files, temporary downloads, backups, and
 `odoo-sub-key.txt` from the Docker build context. The temporary root-level
-`odoo_19_enterprise.deb` remains available to the Dockerfile during the build.
+`odoo_enterprise.deb` remains available to the Dockerfile during the build.
 
 ## GitHub Actions
 
@@ -129,7 +132,6 @@ password.
 | Variable           | Required When             | Default                      | Purpose                                             |
 | ------------------ | ------------------------- | ---------------------------- | --------------------------------------------------- |
 | `SCHEDULE_ENABLED` | Only for scheduled builds | Disabled unless set to `true` | Allows the daily scheduled workflow to run.         |
-| `BUILD_BRANCH`     | Optional                  | Current workflow branch      | Branch checked out by scheduled/defaulted runs.     |
 | `ODOO_VERSION`     | Optional                  | `19.0`                       | Odoo version to download and build.                 |
 | `PUSH_IMAGE`       | Optional                  | `false`                      | Set to `true` to push after the image is built.      |
 | `IMAGE_REGISTRY`   | Optional                  | `docker.io`                  | Registry host, for example`docker.io` or `ghcr.io`. |
@@ -138,7 +140,6 @@ password.
 
 Manual workflow inputs use the same names in lowercase:
 
-- `build_branch`
 - `odoo_version`
 - `push_image`
 - `image_registry`
@@ -207,6 +208,14 @@ docker run --rm \
 
 The entrypoint waits for PostgreSQL before starting Odoo, except when running
 `odoo scaffold` or a custom command.
+
+### Configuration Compatibility
+
+The included `odoo.conf` is maintained for Odoo 19.0 and uses current option
+names after deprecated settings were updated. If you build or run an Odoo 18.0
+or 17.0 image, compare this file with the matching version-specific reference
+configuration in the official Odoo Docker repository:
+<https://github.com/odoo/docker/tree/master>.
 
 ## CLI Reference
 

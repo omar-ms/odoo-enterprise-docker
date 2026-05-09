@@ -70,9 +70,11 @@ RUN echo 'deb http://apt.postgresql.org/pub/repos/apt/ noble-pgdg main' > /etc/a
 RUN npm install -g rtlcss
 
 # Install Odoo Enterprise from local .deb
-ENV ODOO_VERSION=19.0
+ARG ODOO_VERSION=19.0
+LABEL org.opencontainers.image.version="${ODOO_VERSION}"
+ENV ODOO_VERSION=${ODOO_VERSION}
 
-COPY ./odoo_19_enterprise.deb /tmp/odoo_enterprise.deb
+COPY ./odoo_enterprise.deb /tmp/odoo_enterprise.deb
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends /tmp/odoo_enterprise.deb && \

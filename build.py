@@ -25,8 +25,7 @@ DEFAULT_ODOO_VERSION = "19.0"
 DEFAULT_IMAGE_REPO = "odoo-ee"
 
 DEB_DIR = Path("deb")
-DOCKERFILE_PATH = Path("Dockerfile")
-DEFAULT_DOCKERFILE_DEB = "odoo_19_enterprise.deb"
+DOCKER_BUILD_DEB = "odoo_enterprise.deb"
 
 ODOO_DOWNLOAD_PAGE = "https://www.odoo.com/thanks/download"
 
@@ -262,25 +261,8 @@ def download_with_progress(response, destination: Path) -> None:
 
 
 # -----------------------------
-# Dockerfile / .deb helpers
+# .deb helpers
 # -----------------------------
-
-def detect_dockerfile_deb_name() -> str:
-    if not DOCKERFILE_PATH.exists():
-        raise SystemExit("Dockerfile not found.")
-
-    text = DOCKERFILE_PATH.read_text(errors="ignore")
-
-    matches = re.findall(
-        r"(?im)^\s*COPY\s+[^#\n]*?([A-Za-z0-9_.+\-/]*\.deb)\s+",
-        text,
-    )
-
-    if matches:
-        return Path(matches[0]).name
-
-    return DEFAULT_DOCKERFILE_DEB
-
 
 def validate_deb(path: Path) -> None:
     if not path.exists():
@@ -318,7 +300,8 @@ def extract_release_date(path: Path) -> int:
 
 
 def deb_matches_version(path: Path, odoo_version: str) -> bool:
-    return f"odoo_{odoo_version}" in path.name
+    pattern = rf"^odoo_{re.escape(odoo_version)}\+e\.\d{{8}}_all\.deb$"
+    return re.match(pattern, path.name) is not None
 
 
 def find_latest_deb(odoo_version: str) -> Path | None:
@@ -379,7 +362,7 @@ def list_debs(odoo_version: str) -> None:
         )
 
 
-def check_dockerignore(dockerfile_deb_name: str, args: argparse.Namespace) -> None:
+def check_dockerignore(docker_build_deb: str, args: argparse.Namespace) -> None:
     dockerignore = Path(".dockerignore")
 
     if not dockerignore.exists():
@@ -389,8 +372,8 @@ def check_dockerignore(dockerfile_deb_name: str, args: argparse.Namespace) -> No
     blocked_patterns = {
         "*.deb",
         "**/*.deb",
-        dockerfile_deb_name,
-        f"./{dockerfile_deb_name}",
+        docker_build_deb,
+        f"./{docker_build_deb}",
     }
 
     for line in lines:
@@ -405,7 +388,7 @@ def check_dockerignore(dockerfile_deb_name: str, args: argparse.Namespace) -> No
             print(f"Matched pattern: {clean}")
             print()
             print("The Dockerfile needs the temporary root file:")
-            print(f"./{dockerfile_deb_name}")
+            print(f"./{docker_build_deb}")
             print()
 
             if not confirm("Continue anyway?", auto_yes=args.yes):
@@ -650,9 +633,9 @@ def choose_package(odoo_version: str, args: argparse.Namespace) -> Path:
 # -----------------------------
 
 class TemporaryDockerDeb:
-    def __init__(self, source: Path, dockerfile_deb_name: str, args: argparse.Namespace):
+    def __init__(self, source: Path, args: argparse.Namespace):
         self.source = source
-        self.target = Path(dockerfile_deb_name)
+        self.target = Path(DOCKER_BUILD_DEB)
         self.backup = None
         self.args = args
 
@@ -712,23 +695,32 @@ class TemporaryDockerDeb:
 def build_image(
     image_name: str,
     selected_deb: Path,
-    dockerfile_deb_name: str,
+    odoo_version: str,
     args: argparse.Namespace,
 ) -> None:
+    build_args = [
+        "--build-arg",
+        f"ODOO_VERSION={odoo_version}",
+    ]
+
     print()
     print("Build summary:")
     print(f"Local image name: {image_name}")
+    print(f"Odoo version: {odoo_version}")
     print(f"Selected .deb: {selected_deb}")
-    print(f"Dockerfile temporary .deb: ./{dockerfile_deb_name}")
+    print(f"Dockerfile temporary .deb: ./{DOCKER_BUILD_DEB}")
     print()
-    print(f"Build command: docker build -t {image_name} .")
+    print(
+        "Build command: "
+        f"docker build {' '.join(build_args)} -t {image_name} ."
+    )
     print()
 
     if not confirm("Start Docker build now?", default=True, auto_yes=args.yes):
         raise SystemExit("Build cancelled.")
 
-    with TemporaryDockerDeb(selected_deb, dockerfile_deb_name, args):
-        run(["docker", "build", "-t", image_name, "."])
+    with TemporaryDockerDeb(selected_deb, args):
+        run(["docker", "build", *build_args, "-t", image_name, "."])
 
 
 def should_push(args: argparse.Namespace) -> bool:
@@ -800,25 +792,24 @@ def main() -> None:
 
     odoo_version = ask_odoo_version(args)
     platform_version = get_platform_version(odoo_version)
-    dockerfile_deb_name = detect_dockerfile_deb_name()
 
     print()
     print("Odoo Enterprise Docker builder")
-    print("Dockerfile will stay unchanged.")
+    print("Dockerfile stores the selected version as image metadata.")
     print()
     print(f"Odoo version: {odoo_version}")
     print(f"Odoo platform_version: {platform_version}")
     print(f"Default local image: {get_default_image_name(odoo_version)}")
     print(f"Deb folder: {DEB_DIR}/")
-    print(f"Dockerfile expects: ./{dockerfile_deb_name}")
+    print(f"Dockerfile temporary package: ./{DOCKER_BUILD_DEB}")
 
-    check_dockerignore(dockerfile_deb_name, args)
+    check_dockerignore(DOCKER_BUILD_DEB, args)
 
     selected_deb = choose_package(odoo_version, args)
 
     image_name = ask_image_name(odoo_version, args)
 
-    build_image(image_name, selected_deb, dockerfile_deb_name, args)
+    build_image(image_name, selected_deb, odoo_version, args)
 
     print()
     print(f"Build finished: {image_name}")

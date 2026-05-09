@@ -3,11 +3,6 @@ name: Build Odoo Enterprise Image
 on:
   workflow_dispatch:
     inputs:
-      build_branch:
-        description: "Branch to checkout/build. Leave empty to use selected workflow branch."
-        required: false
-        default: ""
-
       odoo_version:
         description: "Odoo version"
         required: true
@@ -59,7 +54,6 @@ jobs:
         shell: bash
 
     env:
-      BUILD_BRANCH: ${{ inputs.build_branch || vars.BUILD_BRANCH || github.ref_name }}
       ODOO_VERSION: ${{ inputs.odoo_version || vars.ODOO_VERSION || '19.0' }}
       PUSH_IMAGE: ${{ inputs.push_image || vars.PUSH_IMAGE || 'false' }}
       IMAGE_REGISTRY: ${{ inputs.image_registry || vars.IMAGE_REGISTRY || 'docker.io' }}
@@ -67,14 +61,11 @@ jobs:
       IMAGE_TAG_INPUT: ${{ inputs.image_tag || vars.IMAGE_TAG || '' }}
 
     steps:
-      - name: Checkout selected branch
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          ref: ${{ env.BUILD_BRANCH }}
 
       - name: Show selected config
         run: |
-          echo "Build branch: $BUILD_BRANCH"
           echo "Odoo version: $ODOO_VERSION"
           echo "Push image: $PUSH_IMAGE"
           echo "Image registry: $IMAGE_REGISTRY"
@@ -171,7 +162,7 @@ jobs:
         if: always()
         run: |
           rm -f ./odoo-sub-key.txt
-          rm -f ./odoo_19_enterprise.deb
+          rm -f ./odoo_enterprise.deb
           rm -f ./*.backup-*
           rm -f deb/*.download || true
 
