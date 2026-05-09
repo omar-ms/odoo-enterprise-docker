@@ -7,25 +7,27 @@ on:
         description: "Odoo version"
         required: true
         default: "19.0"
-
-      push_image:
-        description: "Push image to registry?"
-        required: true
-        default: "false"
         type: choice
         options:
-          - "false"
-          - "true"
+          - "19.0"
+          - "18.0"
+          - "17.0"
 
       image_registry:
         description: "Registry host"
         required: true
         default: "docker.io"
+        type: choice
+        options:
+          - "docker.io"
+          - "ghcr.io"
+          - "registry.gitlab.com"
+          - "quay.io"
+          - "registry.digitalocean.com"
 
       image_repository:
         description: "Registry repository, example: username/odoo-ee"
-        required: false
-        default: ""
+        required: true
 
       image_tag:
         description: "Image tag. Leave empty to use Odoo version."
@@ -54,9 +56,8 @@ jobs:
         shell: bash
 
     env:
-      ODOO_VERSION: ${{ inputs.odoo_version || vars.ODOO_VERSION || '19.0' }}
-      PUSH_IMAGE: ${{ inputs.push_image || vars.PUSH_IMAGE || 'false' }}
-      IMAGE_REGISTRY: ${{ inputs.image_registry || vars.IMAGE_REGISTRY || 'docker.io' }}
+      ODOO_VERSION: ${{ inputs.odoo_version || vars.ODOO_VERSION || '' }}
+      IMAGE_REGISTRY: ${{ inputs.image_registry || vars.IMAGE_REGISTRY || '' }}
       IMAGE_REPOSITORY: ${{ inputs.image_repository || vars.IMAGE_REPOSITORY || '' }}
       IMAGE_TAG_INPUT: ${{ inputs.image_tag || vars.IMAGE_TAG || '' }}
 
@@ -64,10 +65,27 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Validate required config
+        run: |
+          if [ -z "$ODOO_VERSION" ]; then
+            echo "ODOO_VERSION is required."
+            exit 1
+          fi
+
+          if [ -z "$IMAGE_REGISTRY" ]; then
+            echo "IMAGE_REGISTRY is required."
+            exit 1
+          fi
+
+          if [ -z "$IMAGE_REPOSITORY" ]; then
+            echo "IMAGE_REPOSITORY is required."
+            echo "Example: your-dockerhub-username/odoo-ee"
+            exit 1
+          fi
+
       - name: Show selected config
         run: |
           echo "Odoo version: $ODOO_VERSION"
-          echo "Push image: $PUSH_IMAGE"
           echo "Image registry: $IMAGE_REGISTRY"
           echo "Image repository: $IMAGE_REPOSITORY"
           echo "Image tag input: $IMAGE_TAG_INPUT"
@@ -97,23 +115,46 @@ jobs:
           echo "Resolved image tag: $IMAGE_TAG"
           echo "Local image: $LOCAL_IMAGE"
 
-          if [ "$PUSH_IMAGE" = "true" ]; then
-            if [ -z "$IMAGE_REPOSITORY" ]; then
-              echo "IMAGE_REPOSITORY is required when PUSH_IMAGE=true."
-              echo "Example: your-dockerhub-username/odoo-ee"
-              exit 1
-            fi
-
-            if [ "$IMAGE_REPOSITORY" = "CHANGE_ME/odoo-ee" ]; then
-              echo "Please replace IMAGE_REPOSITORY."
-              exit 1
-            fi
-
-            REGISTRY_IMAGE="${IMAGE_REGISTRY%/}/${IMAGE_REPOSITORY}:${IMAGE_TAG}"
-
-            echo "REGISTRY_IMAGE=$REGISTRY_IMAGE" >> "$GITHUB_ENV"
-            echo "Registry image: $REGISTRY_IMAGE"
+          if [ "$IMAGE_REPOSITORY" = "CHANGE_ME/odoo-ee" ]; then
+            echo "Please replace IMAGE_REPOSITORY."
+            exit 1
           fi
+
+          REGISTRY_IMAGE="${IMAGE_REGISTRY%/}/${IMAGE_REPOSITORY}:${IMAGE_TAG}"
+
+          echo "REGISTRY_IMAGE=$REGISTRY_IMAGE" >> "$GITHUB_ENV"
+          echo "Registry image: $REGISTRY_IMAGE"
+
+      - name: Validate registry credentials
+        env:
+          REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+          REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+        run: |
+          if [ -z "$IMAGE_REGISTRY" ]; then
+            echo "IMAGE_REGISTRY could not be resolved."
+            exit 1
+          fi
+
+          if [ -z "$REGISTRY_USERNAME" ]; then
+            echo "REGISTRY_USERNAME secret is required."
+            exit 1
+          fi
+
+          if [ -z "$REGISTRY_TOKEN" ]; then
+            echo "REGISTRY_TOKEN secret is required."
+            exit 1
+          fi
+
+          echo "Registry credentials are configured for: $IMAGE_REGISTRY"
+
+      - name: Login to container registry
+        env:
+          REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+          REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+        run: |
+          echo "$REGISTRY_TOKEN" | docker login "$IMAGE_REGISTRY" \
+            --username "$REGISTRY_USERNAME" \
+            --password-stdin
 
       - name: Show build tools
         run: |
@@ -124,14 +165,6 @@ jobs:
         run: |
           printf "%s" "${{ secrets.ODOO_SUBSCRIPTION_KEY }}" > ./odoo-sub-key.txt
           chmod 600 ./odoo-sub-key.txt
-
-      - name: Login to container registry
-        if: ${{ env.PUSH_IMAGE == 'true' }}
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.IMAGE_REGISTRY }}
-          username: ${{ secrets.REGISTRY_USERNAME }}
-          password: ${{ secrets.REGISTRY_TOKEN }}
 
       - name: Build Odoo Enterprise image
         run: |
@@ -149,12 +182,10 @@ jobs:
           df -h
 
       - name: Tag image for registry
-        if: ${{ env.PUSH_IMAGE == 'true' }}
         run: |
           docker tag "$LOCAL_IMAGE" "$REGISTRY_IMAGE"
 
       - name: Push image to registry
-        if: ${{ env.PUSH_IMAGE == 'true' }}
         run: |
           docker push "$REGISTRY_IMAGE"
 

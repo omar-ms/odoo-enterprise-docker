@@ -22,7 +22,8 @@ a container registry.
 - Python 3
 - A valid Odoo Enterprise subscription key, unless a matching `.deb` already
   exists in `deb/`
-- Registry credentials only when pushing images
+- Registry credentials when using GitHub Actions, because the workflow always
+  pushes the built image
 
 ## Local Build
 
@@ -120,8 +121,8 @@ GitHub repository -> Settings -> Secrets and variables -> Actions
 | Secret                  | Required When     | Purpose                                                     |
 | ----------------------- | ----------------- | ----------------------------------------------------------- |
 | `ODOO_SUBSCRIPTION_KEY` | Always            | Downloads the Odoo Enterprise `.deb` package.                |
-| `REGISTRY_USERNAME`     | Only when pushing | Username for`docker/login-action`.                          |
-| `REGISTRY_TOKEN`        | Only when pushing | Registry password or access token for `docker/login-action`. |
+| `REGISTRY_USERNAME`     | Always            | Username for Docker registry login.                         |
+| `REGISTRY_TOKEN`        | Always            | Registry password or access token for Docker registry login. |
 
 For Docker Hub, `REGISTRY_USERNAME` is usually your Docker Hub username and
 `REGISTRY_TOKEN` should be a Docker Hub access token rather than your account
@@ -132,22 +133,33 @@ password.
 | Variable           | Required When             | Default                      | Purpose                                             |
 | ------------------ | ------------------------- | ---------------------------- | --------------------------------------------------- |
 | `SCHEDULE_ENABLED` | Only for scheduled builds | Disabled unless set to `true` | Allows the daily scheduled workflow to run.         |
-| `ODOO_VERSION`     | Optional                  | `19.0`                       | Odoo version to download and build.                 |
-| `PUSH_IMAGE`       | Optional                  | `false`                      | Set to `true` to push after the image is built.      |
-| `IMAGE_REGISTRY`   | Optional                  | `docker.io`                  | Registry host, for example`docker.io` or `ghcr.io`. |
-| `IMAGE_REPOSITORY` | Required when pushing     | Empty                        | Registry repository, for example`username/odoo-ee`. |
+| `ODOO_VERSION`     | Always                    | None                         | Odoo version to download and build.                 |
+| `IMAGE_REGISTRY`   | Always                    | None                         | Registry host used for scheduled builds, for example `docker.io` or `ghcr.io`. |
+| `IMAGE_REPOSITORY` | Always                    | Empty                        | Registry repository, for example `username/odoo-ee`. |
 | `IMAGE_TAG`        | Optional                  | Odoo version                 | Registry image tag.                                 |
 
 Manual workflow inputs use the same names in lowercase:
 
 - `odoo_version`
-- `push_image`
 - `image_registry`
 - `image_repository`
 - `image_tag`
 
-Manual inputs take precedence when provided. Empty manual inputs fall back to
-repository variables where the workflow allows it, then to the workflow default.
+Manual runs require `odoo_version`, `image_registry`, and `image_repository`.
+`odoo_version` is a dropdown with `19.0`, `18.0`, and `17.0`.
+`image_registry` is a dropdown with `docker.io`, `ghcr.io`,
+`registry.gitlab.com`, `quay.io`, and `registry.digitalocean.com`.
+`image_tag` is optional and falls back to the selected Odoo version when left
+empty.
+
+GitHub Actions always pushes the built image because the GitHub runner is
+temporary. The workflow verifies that the registry credentials are configured,
+and runs `docker login` before building the Odoo image. Invalid registry
+credentials therefore fail before the expensive image build starts. `ODOO_VERSION`,
+`IMAGE_REGISTRY`, and `IMAGE_REPOSITORY` must always be set, either through
+required manual inputs or repository variables for scheduled runs. Manual
+inputs take precedence when provided. Empty manual `image_tag` falls back to
+the repository variable where configured, then to the workflow default.
 
 ### Scheduled Builds
 
@@ -158,11 +170,11 @@ Asia/Riyadh. Scheduled builds only run when:
 SCHEDULE_ENABLED=true
 ```
 
-For a scheduled build that also pushes an image, set at least:
+For a scheduled build, set at least:
 
 ```text
 SCHEDULE_ENABLED=true
-PUSH_IMAGE=true
+ODOO_VERSION=19.0
 IMAGE_REGISTRY=docker.io
 IMAGE_REPOSITORY=username/odoo-ee
 ```
@@ -175,10 +187,9 @@ REGISTRY_USERNAME
 REGISTRY_TOKEN
 ```
 
-The workflow builds a local image named `odoo-ee:<tag>`, then tags and pushes
-`<registry>/<repository>:<tag>` only when pushing is enabled. It also frees disk
-space on the GitHub runner before building and removes sensitive or temporary
-files after the build.
+The workflow builds a local image named `odoo-ee:<tag>`, then always tags and
+pushes `<registry>/<repository>:<tag>`. It also frees disk space on the GitHub
+runner before building and removes sensitive or temporary files after the build.
 
 ## Image Runtime
 

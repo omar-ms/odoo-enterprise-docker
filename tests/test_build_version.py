@@ -91,6 +91,122 @@ class DockerfileVersionContractTests(unittest.TestCase):
 
 
 class GitHubActionsContractTests(unittest.TestCase):
+    def test_workflow_odoo_version_is_manual_choice_input(self):
+        workflow = Path(".github/workflows/build-odoo-ee.yml").read_text()
+        readme = Path("README.md").read_text()
+
+        self.assertIn('odoo_version:\n        description: "Odoo version"', workflow)
+        self.assertIn('        required: true', workflow)
+        self.assertIn('        type: choice', workflow)
+        self.assertIn('          - "19.0"', workflow)
+        self.assertIn('          - "18.0"', workflow)
+        self.assertIn('          - "17.0"', workflow)
+        self.assertIn("Manual runs require `odoo_version`, `image_registry`, and `image_repository`.", readme)
+        self.assertIn("`odoo_version` is a dropdown with `19.0`, `18.0`, and `17.0`.", readme)
+
+    def test_workflow_image_registry_is_manual_choice_input(self):
+        workflow = Path(".github/workflows/build-odoo-ee.yml").read_text()
+        readme = Path("README.md").read_text()
+
+        self.assertIn('image_registry:\n        description: "Registry host"', workflow)
+        self.assertIn('        required: true', workflow)
+        self.assertIn('          - "docker.io"', workflow)
+        self.assertIn('          - "ghcr.io"', workflow)
+        self.assertIn('          - "registry.gitlab.com"', workflow)
+        self.assertIn('          - "quay.io"', workflow)
+        self.assertIn('          - "registry.digitalocean.com"', workflow)
+        self.assertNotIn('          - "aws-ecr"', workflow)
+        self.assertNotIn('          - "google-artifact-registry"', workflow)
+        self.assertNotIn('          - "azure-container-registry"', workflow)
+        self.assertNotIn('          - "other"', workflow)
+        self.assertIn("`image_registry` is a dropdown with `docker.io`, `ghcr.io`,", readme)
+
+    def test_workflow_validates_credentials_before_build(self):
+        workflow = Path(".github/workflows/build-odoo-ee.yml").read_text()
+        readme = Path("README.md").read_text()
+
+        self.assertIn(
+            "IMAGE_REGISTRY: ${{ inputs.image_registry || vars.IMAGE_REGISTRY || '' }}",
+            workflow,
+        )
+        self.assertIn(
+            "ODOO_VERSION: ${{ inputs.odoo_version || vars.ODOO_VERSION || '' }}",
+            workflow,
+        )
+        self.assertIn("- name: Validate required config", workflow)
+        self.assertIn('echo "ODOO_VERSION is required."', workflow)
+        self.assertIn('echo "IMAGE_REGISTRY is required."', workflow)
+        self.assertIn('echo "IMAGE_REPOSITORY is required."', workflow)
+        self.assertNotIn("Resolve registry host", workflow)
+        self.assertNotIn('case "$IMAGE_REGISTRY" in', workflow)
+        self.assertIn("- name: Validate registry credentials", workflow)
+        self.assertIn("REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}", workflow)
+        self.assertIn("REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}", workflow)
+        self.assertIn('docker login "$IMAGE_REGISTRY"', workflow)
+        self.assertIn("--password-stdin", workflow)
+        self.assertIn("`ODOO_VERSION`,\n`IMAGE_REGISTRY`, and `IMAGE_REPOSITORY` must always be set", readme)
+
+        self.assertLess(
+            workflow.index("- name: Validate required config"),
+            workflow.index("- name: Show selected config"),
+        )
+        self.assertLess(
+            workflow.index("- name: Validate registry credentials"),
+            workflow.index("- name: Build Odoo Enterprise image"),
+        )
+        self.assertLess(
+            workflow.index("- name: Login to container registry"),
+            workflow.index("- name: Build Odoo Enterprise image"),
+        )
+
+    def test_workflow_always_pushes_and_has_no_push_toggle(self):
+        workflow = Path(".github/workflows/build-odoo-ee.yml").read_text()
+        readme = Path("README.md").read_text()
+
+        self.assertNotIn("push_image", workflow)
+        self.assertNotIn("PUSH_IMAGE", workflow)
+        self.assertNotIn("push_image", readme)
+        self.assertNotIn("PUSH_IMAGE", readme)
+        self.assertNotIn("if: ${{ env.PUSH_IMAGE == 'true' }}", workflow)
+
+        self.assertIn("- name: Validate registry credentials", workflow)
+        self.assertIn("- name: Login to container registry", workflow)
+        self.assertIn("- name: Tag image for registry", workflow)
+        self.assertIn("- name: Push image to registry", workflow)
+        self.assertIn('docker push "$REGISTRY_IMAGE"', workflow)
+        self.assertIn("GitHub Actions always pushes", readme)
+
+    def test_workflow_manual_image_repository_input_is_required(self):
+        workflow = Path(".github/workflows/build-odoo-ee.yml").read_text()
+        readme = Path("README.md").read_text()
+
+        self.assertIn(
+            'image_repository:\n        description: "Registry repository, example: username/odoo-ee"\n        required: true',
+            workflow,
+        )
+        self.assertNotIn(
+            'image_repository:\n        description: "Registry repository, example: username/odoo-ee"\n        required: false',
+            workflow,
+        )
+        self.assertIn("Manual runs require `odoo_version`, `image_registry`, and `image_repository`.", readme)
+        self.assertIn("`image_tag` is optional and falls back to the selected Odoo version when left", readme)
+
+    def test_workflow_requires_scheduled_version_and_registry_variables(self):
+        workflow = Path(".github/workflows/build-odoo-ee.yml").read_text()
+        readme = Path("README.md").read_text()
+
+        self.assertIn(
+            "ODOO_VERSION: ${{ inputs.odoo_version || vars.ODOO_VERSION || '' }}",
+            workflow,
+        )
+        self.assertIn(
+            "IMAGE_REGISTRY: ${{ inputs.image_registry || vars.IMAGE_REGISTRY || '' }}",
+            workflow,
+        )
+        self.assertIn("| `ODOO_VERSION`     | Always", readme)
+        self.assertIn("| `IMAGE_REGISTRY`   | Always", readme)
+        self.assertIn("ODOO_VERSION=19.0", readme)
+
     def test_workflow_does_not_define_custom_branch_selection(self):
         workflow = Path(".github/workflows/build-odoo-ee.yml").read_text()
         readme = Path("README.md").read_text()
