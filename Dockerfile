@@ -82,12 +82,15 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends /tmp/odoo_enterprise.deb && \
     rm -rf /var/lib/apt/lists/* /tmp/odoo_enterprise.deb
 
-# Copy entrypoint script and Odoo configuration file
+# Copy runtime scripts and Odoo configuration file
 COPY ./entrypoint.sh /
 COPY ./odoo.conf /etc/odoo/
+COPY ./wait-for-psql.py /usr/local/bin/wait-for-psql.py
 
 # Set permissions and mount /var/lib/odoo and /mnt/extra-addons
 RUN chown odoo /etc/odoo/odoo.conf && \
+    chmod +x /entrypoint.sh && \
+    chmod +x /usr/local/bin/wait-for-psql.py && \
     mkdir -p /mnt/extra-addons && \
     chown -R odoo /mnt/extra-addons
 
@@ -98,8 +101,6 @@ EXPOSE 8069 8071 8072
 
 # Set the default config file
 ENV ODOO_RC=/etc/odoo/odoo.conf
-
-COPY wait-for-psql.py /usr/local/bin/wait-for-psql.py
 
 # Set default user when running the container
 USER odoo

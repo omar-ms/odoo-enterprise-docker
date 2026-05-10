@@ -109,6 +109,12 @@ class DockerfileVersionContractTests(unittest.TestCase):
         self.assertIn("COPY ./odoo_enterprise.deb /tmp/odoo_enterprise.deb", text)
         self.assertNotIn("ODOO_DEB_NAME", text)
 
+    def test_dockerfile_makes_runtime_scripts_executable(self):
+        text = Path("Dockerfile").read_text()
+
+        self.assertIn("chmod +x /entrypoint.sh", text)
+        self.assertIn("chmod +x /usr/local/bin/wait-for-psql.py", text)
+
 
 class GitHubActionsContractTests(unittest.TestCase):
     def test_workflow_odoo_version_is_manual_choice_input(self):
